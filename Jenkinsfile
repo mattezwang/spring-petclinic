@@ -2,13 +2,17 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'PROD_URL', defaultValue: 'http://192.168.64.10:8080',
+        string(name: 'PROD_URL', defaultValue: 'http://192.168.68.59:8080',
                description: 'URL of spring-petclinic on the production VM, used as the ZAP scan target. Update after `multipass launch` gives you the VM IP.')
     }
 
     environment {
         SONAR_PROJECT_KEY = 'spring-petclinic'
         ANSIBLE_DIR       = '/home/jenkins/ansible'
+        // ansible-playbook runs from $WORKSPACE below, not from ANSIBLE_DIR,
+        // so ansible.cfg (host_key_checking = False) wouldn't be picked up
+        // by cwd-based discovery alone — point at it explicitly.
+        ANSIBLE_CONFIG    = '/home/jenkins/ansible/ansible.cfg'
     }
 
     options {
