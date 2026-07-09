@@ -28,13 +28,13 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
+        stage('checkout') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Build & Unit Test') {
+        stage('build / unit Test') {
             steps {
                 sh './mvnw -B clean verify'
             }
@@ -45,7 +45,7 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('sonarqube') {
             steps {
                 withSonarQubeEnv('SonarQube') {
                     sh "./mvnw -B sonar:sonar -Dsonar.projectKey=${SONAR_PROJECT_KEY}"
@@ -53,7 +53,7 @@ pipeline {
             }
         }
 
-        stage('Quality Gate') {
+        stage('quality') {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
@@ -61,14 +61,14 @@ pipeline {
             }
         }
 
-        stage('Package') {
+        stage('package') {
             steps {
                 sh './mvnw -B package -DskipTests'
                 stash name: 'jar', includes: 'target/*.jar'
             }
         }
 
-        stage('Deploy to Production VM (Ansible)') {
+        stage('deploy to prod VM (Ansible)') {
             steps {
                 unstash 'jar'
                 sh '''
@@ -79,7 +79,7 @@ pipeline {
             }
         }
 
-        stage('OWASP ZAP Scan') {
+        stage('OWASP ZAP scan') {
             steps {
                 sh '''
                     # Jenkins talks to the host Docker daemon over the mounted
@@ -112,7 +112,7 @@ pipeline {
             }
         }
 
-        stage('Publish Reports') {
+        stage('publish') {
             steps {
                 publishHTML(target: [
                     reportDir: 'zap-report',
