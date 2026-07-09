@@ -82,17 +82,33 @@ pipeline {
         stage('OWASP ZAP Scan') {
             steps {
                 sh '''
-                    mkdir -p zap-report
+                    # Jenkins talks to the host Docker daemon over the mounted
+                    # socket (Docker-outside-of-Docker), so a bind mount like
+                    # -v ${WORKSPACE}/zap-report:/zap/wrk resolves against the
+                    # daemon's own filesystem, not this container's — it looks
+                    # like it works but the report silently goes nowhere. A
+                    # named volume plus `docker run ... cat | >` sidesteps that
+                    # because it streams through the Docker API instead of a
+                    # host path. ZAP's container also runs as uid 1000, so the
+                    # freshly-created (root-owned) volume needs a chown first.
+                    VOL="zap-wrk-${BUILD_NUMBER}"
+                    docker volume create "$VOL" > /dev/null
+                    docker run --rm -v "$VOL":/zap/wrk alpine chown -R 1000:1000 /zap/wrk
+
                     docker run --rm --network devsecops-net \
-                        -v ${WORKSPACE}/zap-report:/zap/wrk/:rw \
+                        -v "$VOL":/zap/wrk/:rw \
                         zaproxy/zap-stable zap-baseline.py \
                         -t ${PROD_URL} \
                         -r zap-report.html \
                         -I || true
+                    # zap-baseline.py exits non-zero when it finds WARN/FAIL
+                    # alerts, which is expected during a normal scan, not a
+                    # pipeline failure — the report itself is what we publish.
+
+                    mkdir -p zap-report
+                    docker run --rm -v "$VOL":/zap/wrk/:ro alpine cat /zap/wrk/zap-report.html > zap-report/zap-report.html
+                    docker volume rm "$VOL" > /dev/null
                 '''
-                // zap-baseline.py exits non-zero when it finds WARN/FAIL alerts,
-                // which is expected during a normal scan, not a pipeline failure —
-                // the report itself is what we publish and act on.
             }
         }
 
