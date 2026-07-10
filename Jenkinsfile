@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'PROD_URL', defaultValue: 'http://192.168.68.59:8080')
+        string(name: 'PROD_URL', defaultValue: 'http://192.168.1.179:8080')
     }
 
     environment {
@@ -75,15 +75,23 @@ pipeline {
         stage('OWASP ZAP scan') {
             steps {
                 sh '''
-                    mkdir -p zap-report
-                    chmod 777 zap-report
+                    # jenkins uses the host docker daemon, so a bind mount of
+                    # $WORKSPACE doesn't resolve correctly - use a named
+                    # volume instead and copy the report out after
+                    VOL="zap-wrk-${BUILD_NUMBER}"
+                    docker volume create "$VOL" > /dev/null
+                    docker run --rm -v "$VOL":/zap/wrk alpine chown -R 1000:1000 /zap/wrk
 
                     docker run --rm --network devsecops-net \
-                        -v "${WORKSPACE}/zap-report":/zap/wrk/:rw \
+                        -v "$VOL":/zap/wrk/:rw \
                         zaproxy/zap-stable zap-baseline.py \
                         -t ${PROD_URL} \
                         -r zap-report.html \
                         -I || true
+
+                    mkdir -p zap-report
+                    docker run --rm -v "$VOL":/zap/wrk/:ro alpine cat /zap/wrk/zap-report.html > zap-report/zap-report.html
+                    docker volume rm "$VOL" > /dev/null
                 '''
             }
         }
